@@ -1,0 +1,35 @@
+{
+  "chunk_count": 2,
+  "chunks_file": "c521c928ef9c5245e555875d04a5c661b6d75df080f530c3669e833f13fe4455.jsonl",
+  "document_classification": "KNOWLEDGE",
+  "document_id": "c521c928ef9c5245e555875d04a5c661b6d75df080f530c3669e833f13fe4455",
+  "page_count": 2,
+  "pages": [
+    {
+      "classification": "KNOWLEDGE",
+      "extraction_method": "text",
+      "ocr_used": false,
+      "page_number": 1,
+      "sections": [
+        "Rice Blast"
+      ],
+      "text_characters": 25
+    },
+    {
+      "classification": "KNOWLEDGE",
+      "extraction_method": "text",
+      "ocr_used": false,
+      "page_number": 2,
+      "sections": [
+        "Rice Blast"
+      ],
+      "text_characters": 25
+    }
+  ],
+  "relative_source_path": "paddy.pdf",
+  "sections_detected": [
+    "Rice Blast"
+  ],
+  "source_filename": "paddy.pdf",
+  "total_extracted_text_characters": 50
+}

@@ -1,0 +1,9 @@
+# This environment is separate from backend/.venv and Whisper.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.11.0+cpu
+transformers==5.17.0
+sentencepiece>=0.2,<1
+fastapi>=0.115,<1
+uvicorn[standard]>=0.30,<1
+pydantic-settings>=2.5,<3
+httpx>=0.27,<1

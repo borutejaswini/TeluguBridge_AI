@@ -1,0 +1,10 @@
+# Whisper phase. Keep the verified Transformers 5.x line; install torch separately
+# using the CUDA wheel appropriate for the machine.
+-r requirements.txt
+transformers==5.17.0
+peft>=0.14,<1
+accelerate>=1.2,<2
+librosa>=0.10.2,<1
+soundfile>=0.12.1,<1
+safetensors>=0.4.5
+numpy>=1.26,<3

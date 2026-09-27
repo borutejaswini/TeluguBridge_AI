@@ -1,0 +1,17 @@
+{
+  "device": "cpu",
+  "embedding_dimension": 1024,
+  "embedding_model": "BAAI/bge-m3",
+  "faiss_index_type": "IndexFlatIP",
+  "index_file": "index.faiss",
+  "index_sha256": "f5c2505ff27aebac90ff7ad388ecb71af3da4efb6bdacaf696d265f9f99345c9",
+  "metadata_count": 2,
+  "metadata_file": "metadata.json",
+  "metadata_order": "source JSONL row order, knowledge rows only",
+  "metadata_sha256": "0a11c7169e8ee72baa00499ae0e8b55bbac318b1eeede97203933a01a98f37ca",
+  "normalized": true,
+  "schema_version": 1,
+  "similarity": "inner_product (cosine for normalized vectors)",
+  "source_sha256": "test-source",
+  "vector_count": 2
+}

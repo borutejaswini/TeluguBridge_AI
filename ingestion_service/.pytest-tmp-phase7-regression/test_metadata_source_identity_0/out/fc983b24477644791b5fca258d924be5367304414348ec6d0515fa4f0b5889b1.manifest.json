@@ -1,0 +1,29 @@
+{
+  "chunk_count": 2,
+  "chunks_file": "fc983b24477644791b5fca258d924be5367304414348ec6d0515fa4f0b5889b1.jsonl",
+  "document_classification": "KNOWLEDGE",
+  "document_id": "fc983b24477644791b5fca258d924be5367304414348ec6d0515fa4f0b5889b1",
+  "page_count": 2,
+  "pages": [
+    {
+      "classification": "KNOWLEDGE",
+      "extraction_method": "text",
+      "ocr_used": false,
+      "page_number": 1,
+      "sections": [],
+      "text_characters": 25
+    },
+    {
+      "classification": "KNOWLEDGE",
+      "extraction_method": "text",
+      "ocr_used": false,
+      "page_number": 2,
+      "sections": [],
+      "text_characters": 28
+    }
+  ],
+  "relative_source_path": "paddy.pdf",
+  "sections_detected": [],
+  "source_filename": "paddy.pdf",
+  "total_extracted_text_characters": 53
+}

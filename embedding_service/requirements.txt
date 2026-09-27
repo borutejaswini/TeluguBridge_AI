@@ -1,0 +1,10 @@
+# Dedicated CPU-only BGE-M3 service. This environment is separate from backend/.venv
+# and indicmt_service/.venv.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.11.0+cpu
+transformers==5.17.0
+sentence-transformers>=3.0,<6
+fastapi>=0.115,<1
+uvicorn[standard]>=0.30,<1
+pydantic-settings>=2.5,<3
+

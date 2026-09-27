@@ -1,0 +1,25 @@
+{
+  "chunk_count": 1,
+  "chunks_file": "75a2dfd1f280f3ee2e9f46c112dccf883541e7a5630c1c62da3f66d0ccbb7675.jsonl",
+  "document_classification": "KNOWLEDGE",
+  "document_id": "75a2dfd1f280f3ee2e9f46c112dccf883541e7a5630c1c62da3f66d0ccbb7675",
+  "page_count": 1,
+  "pages": [
+    {
+      "classification": "KNOWLEDGE",
+      "extraction_method": "ocr",
+      "ocr_used": true,
+      "page_number": 1,
+      "sections": [
+        "RICE BLAST > Symptoms"
+      ],
+      "text_characters": 62
+    }
+  ],
+  "relative_source_path": "scan.pdf",
+  "sections_detected": [
+    "RICE BLAST > Symptoms"
+  ],
+  "source_filename": "scan.pdf",
+  "total_extracted_text_characters": 62
+}

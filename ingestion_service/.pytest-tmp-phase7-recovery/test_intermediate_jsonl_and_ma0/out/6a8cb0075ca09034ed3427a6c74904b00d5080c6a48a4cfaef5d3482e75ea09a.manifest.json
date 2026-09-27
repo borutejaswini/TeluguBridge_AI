@@ -1,0 +1,25 @@
+{
+  "chunk_count": 1,
+  "chunks_file": "6a8cb0075ca09034ed3427a6c74904b00d5080c6a48a4cfaef5d3482e75ea09a.jsonl",
+  "document_classification": "KNOWLEDGE",
+  "document_id": "6a8cb0075ca09034ed3427a6c74904b00d5080c6a48a4cfaef5d3482e75ea09a",
+  "page_count": 1,
+  "pages": [
+    {
+      "classification": "KNOWLEDGE",
+      "extraction_method": "text",
+      "ocr_used": false,
+      "page_number": 1,
+      "sections": [
+        "Bacterial Leaf Blight"
+      ],
+      "text_characters": 58
+    }
+  ],
+  "relative_source_path": "paddy.pdf",
+  "sections_detected": [
+    "Bacterial Leaf Blight"
+  ],
+  "source_filename": "paddy.pdf",
+  "total_extracted_text_characters": 58
+}

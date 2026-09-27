@@ -1,0 +1,2 @@
+{"chunk_id": "chunk-1", "document_id": "doc-1", "source_filename": "paddy.pdf", "relative_source_path": "paddy.pdf", "page_number": 1, "section": "BPH", "extraction_method": "text", "ocr_used": false, "classification": "KNOWLEDGE", "text": "content 1"}
+{"chunk_id": "chunk-2", "document_id": "doc-1", "source_filename": "paddy.pdf", "relative_source_path": "paddy.pdf", "page_number": 2, "section": "Stem Borer", "extraction_method": "text", "ocr_used": false, "classification": "KNOWLEDGE", "text": "content 2"}

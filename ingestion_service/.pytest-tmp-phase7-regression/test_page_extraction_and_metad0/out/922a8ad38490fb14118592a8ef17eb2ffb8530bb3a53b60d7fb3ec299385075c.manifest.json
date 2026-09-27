@@ -1,0 +1,25 @@
+{
+  "chunk_count": 1,
+  "chunks_file": "922a8ad38490fb14118592a8ef17eb2ffb8530bb3a53b60d7fb3ec299385075c.jsonl",
+  "document_classification": "KNOWLEDGE",
+  "document_id": "922a8ad38490fb14118592a8ef17eb2ffb8530bb3a53b60d7fb3ec299385075c",
+  "page_count": 1,
+  "pages": [
+    {
+      "classification": "KNOWLEDGE",
+      "extraction_method": "text",
+      "ocr_used": false,
+      "page_number": 1,
+      "sections": [
+        "STEM BORER > Symptoms"
+      ],
+      "text_characters": 45
+    }
+  ],
+  "relative_source_path": "nested/paddy.pdf",
+  "sections_detected": [
+    "STEM BORER > Symptoms"
+  ],
+  "source_filename": "paddy.pdf",
+  "total_extracted_text_characters": 45
+}

@@ -1,0 +1,35 @@
+{
+  "chunk_count": 2,
+  "chunks_file": "e4d3a57be749049f82802189e5b0d3cb202839710e218f0f3ade24425a1a8827.jsonl",
+  "document_classification": "KNOWLEDGE",
+  "document_id": "e4d3a57be749049f82802189e5b0d3cb202839710e218f0f3ade24425a1a8827",
+  "page_count": 2,
+  "pages": [
+    {
+      "classification": "KNOWLEDGE",
+      "extraction_method": "text",
+      "ocr_used": false,
+      "page_number": 1,
+      "sections": [
+        "Stem Borer > Symptoms"
+      ],
+      "text_characters": 57
+    },
+    {
+      "classification": "KNOWLEDGE",
+      "extraction_method": "text",
+      "ocr_used": false,
+      "page_number": 2,
+      "sections": [
+        "Stem Borer > Symptoms"
+      ],
+      "text_characters": 59
+    }
+  ],
+  "relative_source_path": "paddy.pdf",
+  "sections_detected": [
+    "Stem Borer > Symptoms"
+  ],
+  "source_filename": "paddy.pdf",
+  "total_extracted_text_characters": 116
+}

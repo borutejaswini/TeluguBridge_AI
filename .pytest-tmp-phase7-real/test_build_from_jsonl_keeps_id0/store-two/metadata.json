@@ -1,0 +1,29 @@
+{
+  "records": [
+    {
+      "chunk_id": "chunk-1",
+      "classification": "KNOWLEDGE",
+      "document_id": "doc-1",
+      "extraction_method": "text",
+      "ocr_used": false,
+      "page_number": 1,
+      "section": "BPH",
+      "source_filename": "paddy.pdf",
+      "source_relative_path": "paddy.pdf",
+      "text": "content 1"
+    },
+    {
+      "chunk_id": "chunk-2",
+      "classification": "KNOWLEDGE",
+      "document_id": "doc-1",
+      "extraction_method": "text",
+      "ocr_used": false,
+      "page_number": 2,
+      "section": "Stem Borer",
+      "source_filename": "paddy.pdf",
+      "source_relative_path": "paddy.pdf",
+      "text": "content 2"
+    }
+  ],
+  "schema_version": 1
+}

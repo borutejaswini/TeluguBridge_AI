@@ -1,0 +1,2 @@
+# Isolated Phase 6 CPU FAISS dependency. The BGE model remains in embedding_service.
+faiss-cpu==1.13.2

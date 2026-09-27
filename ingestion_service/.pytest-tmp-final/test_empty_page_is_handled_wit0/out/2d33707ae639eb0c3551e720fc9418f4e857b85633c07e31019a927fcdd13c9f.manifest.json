@@ -1,0 +1,21 @@
+{
+  "chunk_count": 0,
+  "chunks_file": "2d33707ae639eb0c3551e720fc9418f4e857b85633c07e31019a927fcdd13c9f.jsonl",
+  "document_classification": "NOISE",
+  "document_id": "2d33707ae639eb0c3551e720fc9418f4e857b85633c07e31019a927fcdd13c9f",
+  "page_count": 1,
+  "pages": [
+    {
+      "classification": "NOISE",
+      "extraction_method": "ocr",
+      "ocr_used": true,
+      "page_number": 1,
+      "sections": [],
+      "text_characters": 0
+    }
+  ],
+  "relative_source_path": "empty.pdf",
+  "sections_detected": [],
+  "source_filename": "empty.pdf",
+  "total_extracted_text_characters": 0
+}
