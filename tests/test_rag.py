@@ -7,7 +7,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 from app.core.config import Settings
 from app.core.errors import AppError
-from app.services.rag import INSUFFICIENT_EVIDENCE_TE, RagService
+from app.services.rag import RagService
 from app.main import app
 from fastapi.testclient import TestClient
 
@@ -67,20 +67,29 @@ def test_rag_runs_real_service_contracts_and_returns_sources():
     assert "evidence_data_json" in gemini_body
 
 
-def test_rag_returns_safe_telugu_without_calling_gemini_when_evidence_is_weak():
+def test_rag_uses_general_gemini_answer_when_evidence_is_weak():
+    seen = []
+
     def handler(request):
         if request.url.path == "/translate":
             return httpx.Response(200, json={"translation": "unrelated query"})
-        return httpx.Response(200, json=_retrieval_result(score=0.05))
+        if request.url.path == "/retrieve":
+            return httpx.Response(200, json=_retrieval_result(score=0.05))
+        seen.append(request)
+        return httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": "ఇది సాధారణ వ్యవసాయ మార్గదర్శకం. స్థానిక అధికారిని సంప్రదించండి."}]}}]})
 
     service = RagService(
         _settings(nllb_url="https://nllb.test", retrieval_url="https://retrieval.test", gemini_url="https://gemini.test"),
         httpx.Client(transport=httpx.MockTransport(handler)),
     )
     result = service.query("తెలుగు ప్రశ్న")
-    assert result["status"] == "insufficient_evidence"
-    assert result["answer_telugu"] == INSUFFICIENT_EVIDENCE_TE
-    assert result["timings_ms"]["gemini"] == 0
+    assert result["status"] == "general_answer"
+    assert result["answer_grounded"] is False
+    assert result["answer_basis"] == "general_gemini"
+    assert result["answer_telugu"].startswith("ఇది సాధారణ")
+    assert result["timings_ms"]["gemini"] > 0
+    assert len(seen) == 1
+    assert "general agricultural guidance" in seen[0].read().decode("utf-8")
 
 
 def test_gemini_error_preserves_model_and_never_echoes_configured_key():

@@ -20,7 +20,7 @@ Verified components include Phases 1–7, a real `final.wav` Whisper + LoRA run,
 
 | Component | Model | Environment/device |
 |---|---|---|
-| Speech input | `openai/whisper-large-v3-turbo` + `models/after_chunk_01/` | `backend/.venv`, Python 3.12.10, PyTorch 2.11.0+cu130, CUDA / RTX 2050 |
+| Speech input | `openai/whisper-large-v3-turbo` + `models/after_chunk_01/` | `backend/.venv`, CPU by default |
 | Telugu → English | `facebook/nllb-200-distilled-600M` | `indicmt_service/.venv`, CPU; `tel_Telu` → `eng_Latn` |
 | Embedding | `BAAI/bge-m3` | `embedding_service/.venv`, CPU, 1,024 dimensions |
 | Vector search | FAISS `IndexFlatIP` | `vector_store/.venv`, CPU |
@@ -73,9 +73,18 @@ Shutdown checks each configured port and its expected project command before sto
 ## API and frontend
 
 - `POST http://127.0.0.1:8000/api/rag/query` accepts `{"query":"తెలుగు ప్రశ్న"}` and returns the Telugu answer, translated query, retrieved evidence and source/page/scores, timing data, and status.
-- `POST http://127.0.0.1:8000/api/pipeline/run` accepts multipart form data with an audio field named `file`; it returns the transcript, translation, answer, source information, timings, and generated audio path.
+- `POST http://127.0.0.1:8000/api/pipeline/run` accepts multipart form data with an audio field named `file` (WAV, MP3, M4A, FLAC, OGG, WebM, MP4, AAC, or OPUS; maximum 50 MiB). It returns the transcript, translation, answer, source information, timings, and an `audio_job_id` as soon as the text answer is ready. Audio synthesis runs in the background because CPU TTS can take several minutes.
+- Poll `GET http://127.0.0.1:8000/api/audio-jobs/{audio_job_id}` until its status is `complete` or `failed`. A completed job includes `audio_url`; the frontend polls automatically and shows the answer before the audio is ready.
 - `GET http://127.0.0.1:8000/api/audio/{filename}` serves the verified generated WAV. TTS output is stored in `outputs/audio/`.
-- The React page at `http://127.0.0.1:5173` uploads audio, shows the transcript and answer/source details, and plays returned audio. The Gemini key is never sent to the browser.
+- The React/TypeScript page at `http://127.0.0.1:5173` supports both microphone recording and existing audio uploads. It calls the real pipeline endpoint, shows the Telugu transcript and answer while TTS runs, then polls and plays the returned audio. It also displays source citations and warns when the answer is general rather than grounded in the local knowledge base. The Gemini/Groq key is never sent to the browser. Set `VITE_API_BASE_URL` only when the backend is hosted somewhere other than `http://127.0.0.1:8000`.
+
+The end-to-end request path is:
+
+```text
+microphone or uploaded recording → Whisper STT → Telugu/English translation
+→ FAISS retrieval + optional reranking → Gemini or Groq answer
+→ queued Indic Parler-TTS → audio playback
+```
 
 ## Verify a real audio component
 
@@ -89,6 +98,6 @@ The full endpoint is intended to run the complete path above. Do not treat a com
 
 ## Device placement and security
 
-Whisper is the only model assigned to the RTX 2050. NLLB, BGE-M3, FAISS, reranker, and Parler-TTS are CPU-only. Do not load all heavy models on the 4 GiB GPU.
+All model services are configured for CPU inference by default (`WHISPER_DEVICE=cpu`). CPU inference will be slower, and this machine has previously run out of RAM/pagefile when all services were loaded together. The successful CUDA Whisper smoke test recorded in `PROJECT_STATUS.md` is historical; it does not describe the current default.
 
 The real Gemini key belongs only in root `.env`; it must not appear in Git-tracked files, Python/React code, tests, logs, or API responses. The backend alone calls Gemini. Retrieved PDF text is sent to the configured external model only when a Gemini request is authorized and made.

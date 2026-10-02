@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     max_concurrent_whisper: int = 1
 
-    whisper_device: str = "auto"
+    whisper_device: str = "cpu"
     whisper_model_id: str = "openai/whisper-large-v3-turbo"
     whisper_lora_path: str = "./models/after_chunk_01"
     nllb_model_id: str = "facebook/nllb-200-distilled-600M"
@@ -21,13 +21,19 @@ class Settings(BaseSettings):
     reranker_model_id: str = "BAAI/bge-reranker-v2-m3"
     reranker_enabled: bool = False
     reranker_device: str = "cpu"
+    llm_provider: str = "groq"
     gemini_model: str = "gemini-3.8-flash"
-    gemini_api_key: str = ""
-    tts_model_id: str = "ai4bharat/indic-parler-tts"
+    import os
+
+    GCP_API_KEY = os.getenv("GCP_API_KEY")
+    groq_model: str = "openai/gpt-oss-120b"
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+    tts_model_id: str = "gtts/te"
     tts_url: str = "http://127.0.0.1:8002"
     nllb_url: str = "http://127.0.0.1:8001"
     retrieval_url: str = "http://127.0.0.1:8004"
     gemini_url: str = "https://generativelanguage.googleapis.com/v1beta"
+    groq_url: str = "https://api.groq.com/openai/v1"
     tts_timeout_seconds: float = 900
 
     hf_home: str = ""
@@ -39,7 +45,11 @@ class Settings(BaseSettings):
     top_k: int = 5
     service_timeout_seconds: float = 30
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=[str(Path(__file__).resolve().parents[2] / ".env"), ".env"],
+        env_file_encoding="utf-8",
+        extra="ignore"
+    )
 
     def validate_hf_cache_paths(self) -> None:
         for label, value in (("HF_HOME", self.hf_home), ("HF_HUB_CACHE", self.hf_hub_cache), ("TRANSFORMERS_CACHE", self.transformers_cache)):

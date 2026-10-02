@@ -1,7 +1,8 @@
 param([ValidateSet('start','stop')] [string]$Action)
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$ports = @(8000,8001,8002,8003,8004,8005,5173)
+# Port 8001 (IndicMT/NLLB) removed — translation now done via Groq LLM API
+$ports = @(8000,8002,8003,8004,8005,5173)
 $runtime = Join-Path $root 'data\runtime'
 $logDir = Join-Path $root 'data\logs'
 $pidFile = Join-Path $runtime 'services.json'
@@ -20,7 +21,6 @@ function Stop-ProjectListeners {
       $command = [string]$process.CommandLine
       $valid = switch ($port) {
         8000 { $process.Name -eq 'python.exe' -and $command -match 'uvicorn app\.main:app .*--app-dir backend .*--port 8000' }
-        8001 { $process.Name -eq 'python.exe' -and $command -match 'uvicorn app\.main:app .*--app-dir indicmt_service .*--port 8001' }
         8002 { $process.Name -eq 'python.exe' -and $command -match 'uvicorn app\.main:app .*--app-dir tts_service .*--port 8002' }
         8003 { $process.Name -eq 'python.exe' -and $command -match 'uvicorn reranker_service\.app\.main:app .*--port 8003' }
         8004 { $process.Name -eq 'python.exe' -and $command -match 'vector_store[\\/]server\.py' }
@@ -45,13 +45,12 @@ if ($Action -eq 'stop') {
 
 Stop-ProjectListeners
 New-Item -ItemType Directory -Force -Path $runtime,$logDir | Out-Null
-Remove-Item Env:HF_HOME,Env:HF_HUB_CACHE,Env:TRANSFORMERS_CACHE -ErrorAction SilentlyContinue
+Remove-Item Env:HF_HOME,Env:HF_HUB_CACHE,Env:TRANSFORMERS_CACHE,Env:PYTHONUTF8 -ErrorAction SilentlyContinue
 $env:HF_HUB_DOWNLOAD_TIMEOUT = '120'
 
 $services = @(
   @{name='bge'; port=8005; exe='embedding_service\.venv\Scripts\python.exe'; args=@('-m','uvicorn','app.main:app','--app-dir','embedding_service','--host','127.0.0.1','--port','8005'); cwd=$root},
   @{name='reranker'; port=8003; exe='embedding_service\.venv\Scripts\python.exe'; args=@('-m','uvicorn','reranker_service.app.main:app','--host','127.0.0.1','--port','8003'); cwd=$root},
-  @{name='nllb'; port=8001; exe='indicmt_service\.venv\Scripts\python.exe'; args=@('-m','uvicorn','app.main:app','--app-dir','indicmt_service','--host','127.0.0.1','--port','8001'); cwd=$root},
   @{name='retrieval'; port=8004; exe='vector_store\.venv\Scripts\python.exe'; args=@('vector_store\server.py'); cwd=$root},
   @{name='tts'; port=8002; exe='tts_service\.venv\Scripts\python.exe'; args=@('-m','uvicorn','app.main:app','--app-dir','tts_service','--host','127.0.0.1','--port','8002'); cwd=$root},
   @{name='backend'; port=8000; exe='backend\.venv\Scripts\python.exe'; args=@('-m','uvicorn','app.main:app','--app-dir','backend','--host','127.0.0.1','--port','8000'); cwd=$root}

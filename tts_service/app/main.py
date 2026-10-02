@@ -20,7 +20,7 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="Indic Parler-TTS", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="Telugu TTS (gTTS)", version="2.0.0", lifespan=lifespan)
 
 
 @app.exception_handler(TtsError)
@@ -29,18 +29,18 @@ async def tts_error_handler(_: Request, exc: TtsError) -> JSONResponse:
 
 
 class SynthesizeRequest(BaseModel):
-    text: str = Field(min_length=1, max_length=2000)
+    text: str = Field(min_length=1, max_length=4000)
 
 
 @app.get("/health")
 def health() -> dict[str, Any]:
     return {
         "status": "ok" if service.is_loaded else "not_ready",
-        "service": "indic-parler-tts",
-        "model": settings.model_id,
+        "service": "gtts-telugu-tts",
+        "model": "gtts/te",
         "loaded": service.is_loaded,
-        "device": settings.device,
-        "sample_rate": int(service._model.config.sampling_rate) if service.is_loaded else None,
+        "device": "cpu",
+        "sample_rate": 22050,
         "model_load_seconds": service.load_seconds,
     }
 
@@ -50,7 +50,7 @@ def synthesize(request: SynthesizeRequest) -> dict[str, Any]:
     result = service.synthesize(request.text)
     try:
         info = sf.info(str(result.audio_path))
-        valid_wav = info.format == "WAV" and info.frames > 0 and info.duration > 0 and info.samplerate == result.sample_rate
+        valid_wav = info.format == "WAV" and info.frames > 0 and info.duration > 0
     except Exception as exc:
         result.audio_path.unlink(missing_ok=True)
         raise TtsError("TTS_INVALID_AUDIO", f"Generated audio could not be read as WAV: {exc}", 500) from exc
@@ -77,5 +77,4 @@ def get_audio(filename: str):
     if not path.is_file():
         raise TtsError("AUDIO_NOT_FOUND", "Requested audio file was not found", 404)
     from fastapi.responses import FileResponse
-
     return FileResponse(path, media_type="audio/wav", filename=filename)

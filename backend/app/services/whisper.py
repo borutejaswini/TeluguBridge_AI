@@ -147,9 +147,23 @@ class WhisperService:
     @staticmethod
     def load_audio(audio_path: str | Path) -> tuple[np.ndarray, int]:
         """Decode any supported audio file, converting it to 16 kHz mono."""
+        # Try fast C-level soundfile decode first (WAV, FLAC, OGG)
+        try:
+            import soundfile as sf
+            data, sr = sf.read(str(audio_path), dtype="float32")
+            if data.ndim > 1:
+                data = data.mean(axis=1)
+            if sr != TARGET_SAMPLE_RATE:
+                import librosa
+                data = librosa.resample(data, orig_sr=sr, target_sr=TARGET_SAMPLE_RATE)
+            if data.size > 0:
+                return data.astype(np.float32), TARGET_SAMPLE_RATE
+        except Exception:
+            pass
+
+        # Robust fallback using librosa for container formats (WebM, MP4, Opus)
         try:
             import librosa
-
             audio, _ = librosa.load(str(audio_path), sr=TARGET_SAMPLE_RATE, mono=True)
         except Exception as exc:
             raise ConfigurationError(f"Could not decode/resample audio to 16 kHz mono: {exc}") from exc

@@ -2,7 +2,6 @@ import time
 import uuid
 from pathlib import Path
 
-import httpx
 import soundfile as sf
 from fastapi import FastAPI, File, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,11 +11,25 @@ from app.core.config import get_settings
 from app.core.errors import AppError
 from app.core.logging import configure_logging
 from app.services.rag import RagService, rag_service
+from app.services.tts_jobs import get_tts_job, submit_tts_job
 from app.services.whisper import get_whisper_service
+
+from contextlib import asynccontextmanager
+import threading
 
 settings = get_settings()
 configure_logging(settings.log_level)
-app = FastAPI(title="TeluguBridge AI", version="0.1.0")
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    # Pre-warm Whisper in a background thread so first user request is instant
+    whisper = get_whisper_service()
+    threading.Thread(target=whisper.load, daemon=True, name="whisper-preloader").start()
+    yield
+
+
+app = FastAPI(title="TeluguBridge AI", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
@@ -38,10 +51,10 @@ async def health() -> dict[str, str]:
 
 @app.post("/api/rag/query")
 def rag_query(request: dict) -> dict:
-    query = request.get("query") if isinstance(request, dict) else None
+    # Accept either 'query' or 'question' key for flexibility
+    query = request.get("query") or request.get("question") if isinstance(request, dict) else None
     if not isinstance(query, str) or not query.strip():
         from app.core.errors import AppError
-
         raise AppError("EMPTY_QUERY", "query must be a non-empty string", 422)
     return rag_service.query(query)
 
@@ -52,13 +65,12 @@ def pipeline_run(file: UploadFile = File(...)) -> dict:
     from app.services.whisper import WhisperService
 
     pipeline_started = time.perf_counter()
-    if not file.filename or Path(file.filename).suffix.lower() not in {".wav", ".mp3", ".m4a", ".flac", ".ogg"}:
-        raise AppError("INVALID_AUDIO", "Upload a supported audio file (WAV, MP3, M4A, FLAC, or OGG)", 415)
+    if not file.filename or Path(file.filename).suffix.lower() not in {".wav", ".mp3", ".m4a", ".flac", ".ogg", ".webm", ".mp4", ".aac", ".opus"}:
+        raise AppError("INVALID_AUDIO", "Upload a supported audio file (WAV, MP3, M4A, FLAC, OGG, WebM, MP4, AAC, or OPUS)", 415)
     root = Path(__file__).resolve().parents[2]
     temp_dir = root / "data" / "tmp"
     temp_dir.mkdir(parents=True, exist_ok=True)
     temp_path = temp_dir / f"upload-{uuid.uuid4().hex}{Path(file.filename).suffix.lower()}"
-    audio_dir = root / "outputs" / "audio"
     try:
         with temp_path.open("wb") as output:
             total = 0
@@ -72,15 +84,24 @@ def pipeline_run(file: UploadFile = File(...)) -> dict:
                 output.write(chunk)
         audio_started = time.perf_counter()
         try:
-            audio_info = sf.info(str(temp_path))
-            if audio_info.frames < 1 or audio_info.duration <= 0:
-                raise ValueError("audio has no frames")
-        except Exception as exc:
-            raise AppError("AUDIO_DECODE_FAILED", f"Audio could not be read: {type(exc).__name__}: {exc}", 422) from exc
-        try:
             audio_array, processed_sample_rate = WhisperService.load_audio(temp_path)
         except Exception as exc:
             raise AppError("AUDIO_DECODE_FAILED", f"Whisper audio preprocessing failed: {type(exc).__name__}: {exc}", 422) from exc
+        if audio_array.size < 1:
+            raise AppError("AUDIO_DECODE_FAILED", "Audio contains no samples", 422)
+        # soundfile cannot inspect every browser/container format (for example
+        # WebM/Opus). Decoding above is the authoritative check; use metadata
+        # when libsndfile supports the format and otherwise report decoded data.
+        try:
+            audio_info = sf.info(str(temp_path))
+            original_sample_rate = audio_info.samplerate
+            original_channels = audio_info.channels
+            audio_format = audio_info.format
+        except Exception:
+            original_sample_rate = None
+            original_channels = None
+            audio_format = Path(file.filename).suffix.lstrip(".").upper()
+        duration_seconds = audio_array.size / processed_sample_rate
         audio_load_ms = (time.perf_counter() - audio_started) * 1000
 
         whisper_service = get_whisper_service()
@@ -101,62 +122,41 @@ def pipeline_run(file: UploadFile = File(...)) -> dict:
         if rag_result["status"] == "insufficient_evidence":
             raise AppError("INSUFFICIENT_AGRICULTURE_EVIDENCE", rag_result["answer_telugu"], 422)
 
-        tts_started = time.perf_counter()
-        try:
-            response = httpx.post(
-                f"{settings.tts_url.rstrip('/')}/synthesize",
-                json={"text": rag_result["answer_telugu"]},
-                timeout=settings.tts_timeout_seconds,
-            )
-            response.raise_for_status()
-            tts_result = response.json()
-        except httpx.HTTPStatusError as exc:
-            try:
-                detail = exc.response.json().get("error", {}).get("message", "TTS service returned an error")
-            except ValueError:
-                detail = "TTS service returned an error"
-            raise AppError("TTS_FAILED", f"TTS stage failed: {detail}", 502) from exc
-        except (httpx.HTTPError, ValueError) as exc:
-            raise AppError("TTS_UNAVAILABLE", f"TTS stage unavailable: {type(exc).__name__}: {exc}", 503) from exc
-        tts_ms = (time.perf_counter() - tts_started) * 1000
-
-        audio_filename = tts_result.get("audio_filename")
-        if not isinstance(audio_filename, str) or Path(audio_filename).name != audio_filename or not audio_filename.endswith(".wav"):
-            raise AppError("TTS_INVALID_RESPONSE", "TTS returned an invalid audio filename", 502)
-        generated_audio = audio_dir / audio_filename
-        if not generated_audio.is_file():
-            raise AppError("TTS_AUDIO_MISSING", "TTS reported success but the generated WAV does not exist", 502)
-        try:
-            generated_info = sf.info(str(generated_audio))
-            if generated_info.format != "WAV" or generated_info.frames <= 0 or generated_info.duration <= 0:
-                raise ValueError("WAV contains no valid audio frames")
-        except Exception as exc:
-            raise AppError("TTS_AUDIO_INVALID", f"Generated WAV failed validation: {type(exc).__name__}: {exc}", 502) from exc
+        tts_queue_started = time.perf_counter()
+        audio_job_id = submit_tts_job(rag_result["answer_telugu"], settings)
+        tts_queue_ms = (time.perf_counter() - tts_queue_started) * 1000
 
         timings = {
             "audio_loading_ms": round(audio_load_ms, 2),
             "whisper_ms": round(whisper_ms, 2),
             "whisper_stage_wall_ms": round(whisper_wall_ms, 2),
             "whisper_model_load_ms": round((whisper_service.model_load_seconds or 0) * 1000, 2),
-            **{f"{key}_ms": round(float(rag_result["timings_ms"][key]), 2) for key in ("nllb", "embedding", "faiss", "reranker", "gemini")},
-            "tts_ms": round(tts_ms, 2),
+            **{f"{key}_ms": round(float(rag_result["timings_ms"].get(key, 0)), 2) for key in ("nllb", "answer_translation", "embedding", "faiss", "reranker", "llm")},
+            "tts_queue_ms": round(tts_queue_ms, 2),
         }
         timings["total_pipeline_ms"] = round((time.perf_counter() - pipeline_started) * 1000, 2)
         return {
             "status": "success",
-            "audio_filename": audio_filename,
-            "audio_url": f"/api/audio/{audio_filename}",
+            "audio_filename": None,
+            "audio_url": None,
+            "audio_job_id": audio_job_id,
+            "audio_status": "queued",
             "transcript_telugu": transcription.text,
             "translated_query": rag_result["translated_query"],
             "answer_telugu": rag_result["answer_telugu"],
+            "answer_english": rag_result["answer_english"],
+            "answer_status": rag_result["status"],
+            "answer_grounded": rag_result["answer_grounded"],
+            "answer_basis": rag_result["answer_basis"],
+            "llm_provider": rag_result["llm_provider"],
             "sources": rag_result["sources"],
             "retrieved_context": rag_result["retrieved_context"],
             "input_audio": {
-                "format": audio_info.format,
-                "sample_rate": audio_info.samplerate,
+                "format": audio_format,
+                "sample_rate": original_sample_rate,
                 "processed_sample_rate": processed_sample_rate,
-                "channels": audio_info.channels,
-                "duration_seconds": audio_info.duration,
+                "channels": original_channels,
+                "duration_seconds": duration_seconds,
             },
             "timings": timings,
             "whisper": {
@@ -172,9 +172,8 @@ def pipeline_run(file: UploadFile = File(...)) -> dict:
             },
             "tts": {
                 "model": settings.tts_model_id,
-                "sample_rate": generated_info.samplerate,
-                "duration_seconds": generated_info.duration,
                 "device": "cpu",
+                "status": "queued",
             },
         }
     finally:
@@ -195,3 +194,11 @@ def get_pipeline_audio(filename: str) -> FileResponse:
     if not path.is_file():
         raise AppError("AUDIO_NOT_FOUND", "Generated audio was not found", 404)
     return FileResponse(path, media_type="audio/wav", filename=filename)
+
+
+@app.get("/api/audio-jobs/{job_id}")
+def get_pipeline_audio_job(job_id: str) -> dict:
+    job = get_tts_job(job_id)
+    if job is None:
+        raise AppError("AUDIO_JOB_NOT_FOUND", "Audio generation job was not found or has expired", 404)
+    return {"job_id": job_id, **job}

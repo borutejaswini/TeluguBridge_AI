@@ -33,6 +33,7 @@ async def translation_error_handler(_: Request, exc: TranslationServiceError) ->
 
 class TranslateRequest(BaseModel):
     text: str = Field(min_length=1, max_length=20_000)
+    preserve_quantities: bool = True
 
 
 @app.get("/health")
@@ -51,7 +52,7 @@ def health() -> dict[str, object]:
 
 @app.post("/translate")
 def translate(request: TranslateRequest) -> dict[str, object]:
-    result = translator.translate(request.text)
+    result = translator.translate(request.text, preserve_quantities=request.preserve_quantities)
     return {
         "translation": result.translation,
         "model": result.model_id,

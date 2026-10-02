@@ -6,9 +6,6 @@ import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
-
-import numpy as np
 
 from app.config import Settings, get_settings
 from app.errors import TtsError
@@ -26,98 +23,117 @@ class Synthesis:
     model_id: str
 
 
-class IndicParlerService:
-    """Keep one CPU Parler model loaded for the lifetime of this service."""
+class GttsTtsService:
+    """Google Text-to-Speech (gTTS) service for Telugu — instant CPU synthesis."""
 
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or get_settings()
         self._lock = threading.Lock()
-        self._model: Any | None = None
-        self._tokenizer: Any | None = None
-        self._description_tokenizer: Any | None = None
-        self._torch: Any | None = None
         self.load_seconds: float | None = None
+        self._loaded = False
 
     @property
     def is_loaded(self) -> bool:
-        return self._model is not None
+        return self._loaded
 
     def load(self) -> None:
-        if self.is_loaded:
+        if self._loaded:
             return
         with self._lock:
-            if self.is_loaded:
+            if self._loaded:
                 return
             started = time.perf_counter()
-            if self.settings.device != "cpu":
-                raise TtsError("INVALID_DEVICE", "Indic Parler-TTS must remain on CPU", 500)
             try:
-                import torch
-                from parler_tts import ParlerTTSForConditionalGeneration
-                from transformers import AutoTokenizer
-
-                model = ParlerTTSForConditionalGeneration.from_pretrained(
-                    self.settings.model_id,
-                    token=self.settings.hf_token or None,
-                    torch_dtype=torch.float32,
-                    attn_implementation="eager",
-                ).to("cpu")
-                tokenizer = AutoTokenizer.from_pretrained(self.settings.model_id, token=self.settings.hf_token or None)
-                description_tokenizer = AutoTokenizer.from_pretrained(
-                    model.config.text_encoder._name_or_path, token=self.settings.hf_token or None
-                )
-                model.eval()
-                self._model = model
-                self._tokenizer = tokenizer
-                self._description_tokenizer = description_tokenizer
-                self._torch = torch
+                import gtts  # noqa: F401 — validate import on startup
+                self._loaded = True
                 self.load_seconds = time.perf_counter() - started
-                logger.info("Indic Parler-TTS loaded model=%s device=cpu load_seconds=%.3f", self.settings.model_id, self.load_seconds)
-            except TtsError:
-                raise
-            except Exception as exc:
-                detail = f"{type(exc).__name__}: {exc}"
-                lowered = detail.lower()
-                code = "TTS_MODEL_ACCESS_ERROR" if any(term in lowered for term in ("gated", "401", "unauthorized", "restricted")) else "TTS_MODEL_LOAD_FAILED"
-                raise TtsError(code, f"Could not load {self.settings.model_id}: {detail}", 503) from exc
+                logger.info("gTTS service ready load_seconds=%.3f", self.load_seconds)
+            except ImportError as exc:
+                raise TtsError(
+                    "TTS_MODEL_LOAD_FAILED",
+                    "gTTS is not installed. Run: pip install gTTS",
+                    503,
+                ) from exc
 
     def synthesize(self, text: str) -> Synthesis:
         if not isinstance(text, str) or not text.strip():
             raise TtsError("EMPTY_TEXT", "text must not be empty", 422)
         clean_text = text.strip()
         if len(clean_text) > self.settings.max_text_characters:
-            raise TtsError("TEXT_TOO_LONG", f"text exceeds {self.settings.max_text_characters} characters", 422)
+            raise TtsError(
+                "TEXT_TOO_LONG",
+                f"text exceeds {self.settings.max_text_characters} characters",
+                422,
+            )
         self.load()
-        assert self._model is not None and self._torch is not None
         try:
-            with self._lock, self._torch.inference_mode():
-                description = self._description_tokenizer(self.settings.voice_description, return_tensors="pt")
-                prompt = self._tokenizer(clean_text, return_tensors="pt")
-                started = time.perf_counter()
-                generated = self._model.generate(
-                    input_ids=description.input_ids,
-                    prompt_input_ids=prompt.input_ids,
-                )
-                latency_ms = (time.perf_counter() - started) * 1000
-                audio = generated.detach().cpu().numpy().squeeze()
-                if audio.ndim != 1 or audio.size == 0 or not np.isfinite(audio).all() or float(np.max(np.abs(audio))) <= 0:
-                    raise TtsError("TTS_EMPTY_AUDIO", "TTS model returned empty or invalid audio", 500)
-                sample_rate = int(self._model.config.sampling_rate)
-                output_dir = self.settings.output_dir
-                output_dir.mkdir(parents=True, exist_ok=True)
-                output_path = output_dir / f"telugu-{uuid.uuid4().hex}.wav"
-                import soundfile as sf
+            from gtts import gTTS
+            import soundfile as sf
+            import numpy as np
 
-                sf.write(str(output_path), audio.astype(np.float32), sample_rate, format="WAV", subtype="PCM_16")
-                duration = audio.size / sample_rate
-                if duration <= 0 or not output_path.is_file() or output_path.stat().st_size <= 44:
-                    output_path.unlink(missing_ok=True)
-                    raise TtsError("TTS_INVALID_AUDIO", "Generated WAV failed the non-empty audio check", 500)
-                return Synthesis(output_path, sample_rate, duration, latency_ms, "cpu", self.settings.model_id)
+            started = time.perf_counter()
+
+            # Synthesise Telugu speech using gTTS (uses Google TTS API, lang=te)
+            tts_obj = gTTS(text=clean_text, lang=self.settings.gtts_lang, slow=self.settings.gtts_slow)
+
+            output_dir = self.settings.output_dir
+            output_dir.mkdir(parents=True, exist_ok=True)
+
+            # gTTS writes MP3; we convert it to WAV for the existing pipeline
+            mp3_path = output_dir / f"telugu-{uuid.uuid4().hex}.mp3"
+            wav_path = output_dir / f"telugu-{uuid.uuid4().hex}.wav"
+
+            with self._lock:
+                tts_obj.save(str(mp3_path))
+
+            # Convert MP3 → WAV using pydub (falls back to soundfile/librosa)
+            try:
+                from pydub import AudioSegment
+                audio_segment = AudioSegment.from_mp3(str(mp3_path))
+                audio_segment = audio_segment.set_frame_rate(22050).set_channels(1)
+                audio_segment.export(str(wav_path), format="wav")
+            except Exception:
+                # Fallback: use soundfile with scipy or librosa
+                try:
+                    import librosa
+                    y, sr = librosa.load(str(mp3_path), sr=22050, mono=True)
+                    sf.write(str(wav_path), y, sr, format="WAV", subtype="PCM_16")
+                except Exception as exc2:
+                    mp3_path.unlink(missing_ok=True)
+                    raise TtsError(
+                        "TTS_CONVERSION_FAILED",
+                        f"MP3 → WAV conversion failed: {exc2}",
+                        500,
+                    ) from exc2
+            finally:
+                mp3_path.unlink(missing_ok=True)
+
+            latency_ms = (time.perf_counter() - started) * 1000
+
+            # Validate output
+            info = sf.info(str(wav_path))
+            duration = info.duration
+            sample_rate = info.samplerate
+
+            if duration <= 0 or not wav_path.is_file() or wav_path.stat().st_size <= 44:
+                wav_path.unlink(missing_ok=True)
+                raise TtsError("TTS_INVALID_AUDIO", "Generated WAV is empty or invalid", 500)
+
+            logger.info(
+                "gTTS synthesized Telugu audio duration=%.2fs latency_ms=%.0f",
+                duration,
+                latency_ms,
+            )
+            return Synthesis(wav_path, sample_rate, duration, latency_ms, "cpu", "gtts/te")
+
         except TtsError:
             raise
         except Exception as exc:
-            raise TtsError("TTS_INFERENCE_FAILED", f"Indic Parler-TTS inference failed: {type(exc).__name__}: {exc}", 500) from exc
+            raise TtsError(
+                "TTS_INFERENCE_FAILED",
+                f"gTTS synthesis failed: {type(exc).__name__}: {exc}",
+                500,
+            ) from exc
 
 
-service = IndicParlerService()
+service = GttsTtsService()

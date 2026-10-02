@@ -135,17 +135,21 @@ class NllbTranslationService:
     @staticmethod
     def _restore_quantities(text: str, protected: list[tuple[str, str]]) -> str:
         restored = text
+        missing: list[str] = []
         for marker, original in protected:
             if marker.lower() not in restored.lower():
-                raise TranslationServiceError(
-                    "TRANSLATION_INTEGRITY_ERROR",
-                    "NLLB output did not preserve a protected number or quantity; refusing to alter it silently",
-                    502,
-                )
+                missing.append(original)
+                continue
             restored = re.sub(re.escape(marker), lambda _: original, restored, flags=re.IGNORECASE)
+        if missing:
+            # NLLB occasionally drops sentinel tokens. Keep the translation
+            # usable and preserve the exact user-provided quantities explicitly
+            # instead of failing the complete audio pipeline.
+            logger.warning("NLLB dropped protected quantities; appending originals: %s", missing)
+            restored = f"{restored} Quantities: {', '.join(missing)}"
         return restored
 
-    def translate(self, text: str) -> TranslationResult:
+    def translate(self, text: str, *, preserve_quantities: bool = True) -> TranslationResult:
         if not isinstance(text, str) or not text.strip():
             raise TranslationServiceError("INVALID_INPUT", "text must be a non-empty string", 422)
         if len(text) > 20_000:
@@ -153,7 +157,7 @@ class NllbTranslationService:
         if not self.is_loaded:
             raise TranslationServiceError("SERVICE_NOT_READY", "NLLB model has not been loaded", 503)
 
-        protected_text, quantities = self._protect_quantities(text.strip())
+        protected_text, quantities = self._protect_quantities(text.strip()) if preserve_quantities else (text.strip(), [])
         started = time.perf_counter()
         with self._translate_lock, torch.inference_mode():
             encoded = self._tokenizer(

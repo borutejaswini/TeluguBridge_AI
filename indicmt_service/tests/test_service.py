@@ -89,13 +89,12 @@ def test_translation_forces_english_and_restores_quantities():
     assert result.output_language == "eng_Latn"
 
 
-def test_missing_quantity_marker_returns_structured_integrity_error():
+def test_missing_quantity_marker_is_recovered_without_failing_translation():
     service, tokenizer, _ = make_service()
     service.load()
     tokenizer.batch_decode = lambda *args, **kwargs: ["The crop received fertilizer today."]
-    with pytest.raises(TranslationServiceError) as error:
-        service.translate("పంటకు 5 కిలోలు ఎరువు వాడారు")
-    assert error.value.code == "TRANSLATION_INTEGRITY_ERROR"
+    result = service.translate("పంటకు 5 కిలోలు ఎరువు వాడారు")
+    assert "5 కిలోలు" in result.translation
 
 
 def test_empty_text_is_a_structured_error():
